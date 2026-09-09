@@ -7,6 +7,8 @@
   let svg: SVGSVGElement;
   let containerW = 800;
 
+  export let simple = false;
+
   const margin = { top: 24, right: 70, bottom: 36, left: 64 };
   const height = 360;
 
@@ -170,7 +172,7 @@
 
 <div class="chart">
   <header>
-    <h3>Conversion window — Roth conversions, RMDs, marginal rate, IRMAA shading</h3>
+    <h3>{simple ? 'Your plan, year by year' : 'Conversion window — Roth conversions, RMDs, marginal rate, IRMAA shading'}</h3>
     <div class="toggle">
       <button class:active={$displayModeStore === 'real'} on:click={() => displayModeStore.set('real')}>Real $</button>
       <button class:active={$displayModeStore === 'nominal'} on:click={() => displayModeStore.set('nominal')}>Nominal $</button>
@@ -187,6 +189,14 @@
       <span class="lg"><span class="sw" style:background={bg} style:border="1px solid #ccc"></span>{tierLabels[i]}</span>
     {/each}
   </div>
+  {#if simple}
+    <p class="hint">
+      <strong>Reading this:</strong> green bars are money moving into your Roth while you're converting;
+      orange bars are forced withdrawals once you're 73+ (RMDs). The red dashed line is the tax rate on your
+      last dollar of income. A warm background means your income (counted two years earlier) triggered a
+      Medicare surcharge — stay in the white/light area for the best plan.
+    </p>
+  {/if}
 </div>
 
 <style>
@@ -212,4 +222,6 @@
   .sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
   .line { display: inline-block; width: 16px; border-top: 2px dashed #dc2626; }
   .sep { color: #ccc; }
+  .hint { font-size: 11px; color: #6b7280; margin-top: 8px; line-height: 1.4; }
+  .hint strong { color: #1e3a8a; }
 </style>

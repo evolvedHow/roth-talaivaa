@@ -122,3 +122,20 @@ export function irmaaSurcharge(
 
 // Sentinel for "use synthesized pre-sim MAGI" — see simulatePath.
 export const PRE_SIM_MAGI_SENTINEL = -1;
+
+/**
+ * Projected MAGI ceiling (for the given filing status) below which a household
+ * pays NO Medicare surcharge in `targetYear`. Used by the conversion strategy
+ * to size annual conversions without tripping IRMAA.
+ */
+export function irmaaNoSurchargeCeiling(
+  fs: FilingStatus,
+  targetYear: number,
+  inflationRate: number,
+): number | null {
+  const tier0 = IRMAA_TIERS_2025[0];
+  const ceil = magiCeilingForFiling(tier0, fs);
+  if (ceil == null) return null;
+  const yearsFromBase = Math.max(0, targetYear - IRMAA_BASE_YEAR);
+  return ceil * Math.pow(1 + inflationRate, yearsFromBase);
+}

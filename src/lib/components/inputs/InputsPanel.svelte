@@ -29,7 +29,7 @@
     const mode = (e.target as HTMLSelectElement).value;
     scenarioStore.update(s => {
       if (mode === 'none') s.strategy = { mode: 'none' };
-      else if (mode === 'fill-bracket') s.strategy = { mode: 'fill-bracket', targetMarginalRate: 0.24, startAge: s.retireAge, endAge: 75, annualCap: 0 };
+      else if (mode === 'fill-bracket') s.strategy = { mode: 'fill-bracket', targetMarginalRate: 0.24, startAge: s.retireAge, endAge: 75, annualCap: 0, avoidIRMAA: true };
       else if (mode === 'fixed-annual') s.strategy = { mode: 'fixed-annual', amount: 50000, startAge: s.retireAge, endAge: 75, perAgeOverride: {} };
       else if (mode === 'custom') s.strategy = { mode: 'custom', perAge: {} };
       return s;

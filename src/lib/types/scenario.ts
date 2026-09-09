@@ -13,6 +13,9 @@ export type ConversionStrategy =
       // (fill all the way to the bracket top). Otherwise the converted
       // amount is min(bracketFill, annualCap).
       annualCap: number;
+      // Keep each year's MAGI inside the "no Medicare surcharge" tier so
+      // conversions don't trigger IRMAA (defaults to true when absent).
+      avoidIRMAA?: boolean;
     }
   | {
       mode: 'fixed-annual';
@@ -116,7 +119,7 @@ export function defaultScenario(): ScenarioInputs {
 
     withdrawalOrder: ['taxable', 'taxDeferred', 'taxFree'],
 
-    strategy: { mode: 'fill-bracket', targetMarginalRate: 0.24, startAge: 65, endAge: 72, annualCap: 0 },
+    strategy: { mode: 'fill-bracket', targetMarginalRate: 0.24, startAge: 65, endAge: 72, annualCap: 0, avoidIRMAA: true },
 
     planUntilAge: 95,
     taxLawMode: 'freeze-current',

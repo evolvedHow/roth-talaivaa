@@ -12,12 +12,14 @@
   import SweepChart from './lib/components/viz/SweepChart.svelte';
   import StrategyComparisonChart from './lib/components/viz/StrategyComparisonChart.svelte';
   import ConversionWindowChart from './lib/components/viz/ConversionWindowChart.svelte';
+  import QuickPanel from './lib/components/quick/QuickPanel.svelte';
+  import QuickVerdict from './lib/components/quick/QuickVerdict.svelte';
   import YearTable from './lib/components/viz/YearTable.svelte';
   import MCSummaryCards from './lib/components/viz/MCSummaryCards.svelte';
   import FanChart from './lib/components/viz/FanChart.svelte';
 
-  type View = 'advisor' | 'stress';
-  let view: View = 'advisor';
+  type View = 'quick' | 'advisor' | 'stress';
+  let view: View = 'quick';
 
   onMount(() => { loadRules(); });
 </script>
@@ -30,6 +32,7 @@
     </div>
     <ProfileBar />
     <div class="tabs">
+      <button class:active={view === 'quick'} on:click={() => view = 'quick'}>Quick plan</button>
       <button class:active={view === 'advisor'} on:click={() => view = 'advisor'}>Advisor</button>
       <button class:active={view === 'stress'} on:click={() => view = 'stress'}>Stress test</button>
     </div>
@@ -45,14 +48,20 @@
   {:else}
     <div class="body">
       <div class="left">
-        {#if view === 'advisor'}
+        {#if view === 'quick'}
+          <QuickPanel />
+        {:else if view === 'advisor'}
           <InputsPanel />
         {:else}
           <MCControls />
         {/if}
       </div>
       <div class="right">
-        {#if view === 'advisor'}
+        {#if view === 'quick'}
+          <QuickVerdict />
+          <SweepChart simple />
+          <ConversionWindowChart simple />
+        {:else if view === 'advisor'}
           <HowToRead />
           <ComparisonHeader />
           <SweepChart />

@@ -7,6 +7,8 @@
   let svg: SVGSVGElement;
   let containerW = 800;
 
+  export let simple = false;
+
   const margin = { top: 24, right: 70, bottom: 38, left: 70 };
   const height = 300;
 
@@ -142,19 +144,21 @@
 
     // Axis labels
     const xLabel = result.mode === 'fill-bracket'
-      ? 'Annual conversion cap ($/yr) — left = conservative, right = aggressive'
-      : 'Conversion amount ($/yr) — left = nothing, right = aggressive';
+      ? (simple ? 'Annual conversion cap ($/yr) — left = conservative, right = aggressive'
+               : 'Annual conversion cap ($/yr) — left = conservative, right = aggressive')
+      : (simple ? 'How much you convert each year ($) — left = little, right = aggressive'
+               : 'Conversion amount ($/yr) — left = nothing, right = aggressive');
     g.append('text').attr('x', innerW / 2).attr('y', innerH + 32)
       .attr('text-anchor', 'middle').attr('font-size', 11).attr('fill', '#666')
       .text(xLabel);
     g.append('text')
       .attr('transform', `translate(-55,${innerH / 2}) rotate(-90)`)
       .attr('text-anchor', 'middle').attr('font-size', 10).attr('fill', '#2a4d8f')
-      .text('Terminal real NW (left)');
+      .text(simple ? 'Wealth at 95 (left)' : 'Terminal real NW (left)');
     g.append('text')
       .attr('transform', `translate(${innerW + 55},${innerH / 2}) rotate(-90)`)
       .attr('text-anchor', 'middle').attr('font-size', 10).attr('fill', '#d97706')
-      .text('Lifetime tax NPV (right)');
+      .text(simple ? 'Total tax cost (right)' : 'Lifetime tax NPV (right)');
   }
 
   onMount(() => {
@@ -174,21 +178,36 @@
 {#if result}
   <div class="chart">
     <header>
-      <h3>Sweet spot — how the strategy lands across conversion amounts</h3>
+      <h3>{simple ? 'Impact of converting more or less' : 'Sweet spot — how the strategy lands across conversion amounts'}</h3>
       <button class="apply" on:click={applyOptimum} title="Set the slider to the NW-optimal amount">
-        ★ Use optimum (${(result.optimumByNW.amount/1000).toFixed(0)}k/yr {result.mode === 'fill-bracket' ? 'cap' : ''})
+        {simple
+          ? '★ Use this amount'
+          : `★ Use optimum (${(result.optimumByNW.amount/1000).toFixed(0)}k/yr ${result.mode === 'fill-bracket' ? 'cap' : ''})`}
       </button>
     </header>
     <svg bind:this={svg}></svg>
     <div class="legend">
-      <span class="lg"><span class="line solid"></span>Terminal real NW (higher = better)</span>
-      <span class="lg"><span class="line dashed"></span>Lifetime tax NPV (lower = better)</span>
-      <span class="lg"><span class="sw" style="background:#86efac;opacity:0.5"></span>Within {(result.bandPct*100).toFixed(1)}% of NW optimum</span>
-      <span class="lg"><span class="star">★</span>NW optimum: ${(result.optimumByNW.amount/1000).toFixed(0)}k → {(result.optimumByNW.terminalNWReal/1_000_000).toFixed(2)}M NW</span>
-      <span class="lg"><span class="dot tax"></span>Tax-min optimum: ${(result.optimumByTax.amount/1000).toFixed(0)}k → ${(result.optimumByTax.lifetimeTaxNPV/1000).toFixed(0)}k tax</span>
+      <span class="lg"><span class="line solid"></span>{simple ? 'Wealth at 95 (higher = better)' : 'Terminal real NW (higher = better)'}</span>
+      <span class="lg"><span class="line dashed"></span>{simple ? 'Total tax cost (lower = better)' : 'Lifetime tax NPV (lower = better)'}</span>
+      <span class="lg"><span class="sw" style="background:#86efac;opacity:0.5"></span>{simple ? 'Good zone — within '.concat((result.bandPct*100).toFixed(1), '% of best wealth') : 'Within ' + (result.bandPct*100).toFixed(1) + '% of NW optimum'}</span>
+      <span class="lg"><span class="star">★</span>
+        {simple
+          ? `Suggested: ${(result.optimumByNW.amount/1000).toFixed(0)}k/yr`
+          : `NW optimum: ${(result.optimumByNW.amount/1000).toFixed(0)}k → ${(result.optimumByNW.terminalNWReal/1_000_000).toFixed(2)}M NW`}
+      </span>
+      {#if !simple}
+        <span class="lg"><span class="dot tax"></span>Tax-min optimum: ${(result.optimumByTax.amount/1000).toFixed(0)}k → ${(result.optimumByTax.lifetimeTaxNPV/1000).toFixed(0)}k tax</span>
+      {/if}
     </div>
 
-    {#if result.mode === 'fill-bracket'}
+    {#if simple}
+      <p class="hint">
+        <strong>Reading this:</strong> left = convert almost nothing, right = convert a lot.
+        The <span style="color:#16a34a;font-weight:700;">green zone</span> is where you have the most wealth left at 95.
+        Click <strong>★ Use this amount</strong> to snap your slider there, or drag the slider in the sidebar and
+        watch the dashed line move.
+      </p>
+    {:else if result.mode === 'fill-bracket'}
       <p class="hint">
         <strong>Reading this:</strong> The X axis is your <em>annual conversion cap</em>. Low cap = you convert little each year (conservative). High cap = you let the strategy fill to the top of your {((($scenarioStore.strategy.mode === 'fill-bracket' ? $scenarioStore.strategy.targetMarginalRate : 0.24) * 100).toFixed(0))}% bracket. The green band marks the range within {(result.bandPct*100).toFixed(1)}% of the best terminal net worth — anywhere inside is essentially as good. Click ★ to snap your cap slider to the optimum. (Setting cap=$0 in the inputs means "no cap" — the most aggressive option, intentionally excluded from this sweep so the optimum points at a meaningful dollar value.)
       </p>

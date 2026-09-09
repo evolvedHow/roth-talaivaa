@@ -97,11 +97,16 @@ export function interpret(rules: TaxRules, scenario: ScenarioInputs): TaxResult 
 
   // ── Standard Deduction + Senior Bonus ────────────────────────────────────
   const isOver65 = age >= 65;
+  const spouseOver65 = Number(scenario['spouse_age'] ?? 0) >= 65;
   let standardDeduction = rules.federal.standard_deduction[fs] ?? 0;
 
-  if (isOver65 && rules.federal.senior_bonus[fs]) {
+  if ((isOver65 || spouseOver65) && rules.federal.senior_bonus[fs]) {
     const sb = rules.federal.senior_bonus[fs]!;
-    let bonus = sb.amount;
+    // MFJ: one bonus amount per eligible spouse; other statuses: the taxpayer only.
+    let eligible = isOver65 ? 1 : 0;
+    if (fs === 'married_filing_jointly' && spouseOver65) eligible += 1;
+    eligible = Math.min(eligible, fs === 'married_filing_jointly' ? 2 : 1);
+    let bonus = sb.amount * eligible;
     if (magi > sb.phase_out_threshold) {
       bonus = Math.max(0, bonus - (magi - sb.phase_out_threshold) * sb.phase_out_rate);
     }

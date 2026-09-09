@@ -28,6 +28,24 @@ function fillBracket(
   return Math.max(0, Math.min(headroom, taxDeferredAvailable));
 }
 
+// Ceiling of the highest federal bracket whose rate is <= targetMarginalRate.
+// Used to keep a year's total taxable income (conversion + any ordinary
+// withdrawals) inside the target bracket so the strategy doesn't silently
+// spill into the next bracket.
+export function bracketCeilingFor(
+  rules: TaxRules,
+  fs: FilingStatus,
+  targetMarginalRate: number,
+): number | null {
+  const brackets: Bracket[] = (rules.federal.brackets[fs] ?? []).slice().sort((a, b) => a.floor - b.floor);
+  let ceiling: number | null = null;
+  for (const b of brackets) {
+    if (b.rate <= targetMarginalRate + 1e-9) ceiling = b.ceiling ?? Infinity;
+    else break;
+  }
+  return ceiling;
+}
+
 export function resolveConversion(
   strategy: ConversionStrategy,
   age: number,

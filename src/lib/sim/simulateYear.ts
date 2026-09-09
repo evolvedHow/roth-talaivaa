@@ -5,8 +5,8 @@ import type { YearState, AccountBalances, WithdrawalBreakdown } from '../types/y
 import { calcRMD } from './rmd';
 import { annualSSForYear, taxableSSPortion } from './socialSecurity';
 import { projectRules } from './projectRules';
-import { resolveConversion } from './conversionStrategy';
-import { irmaaSurcharge } from './irmaa';
+import { resolveConversion, bracketCeilingFor } from './conversionStrategy';
+import { irmaaSurcharge, irmaaNoSurchargeCeiling } from './irmaa';
 
 interface SimContext {
   baseRules: TaxRules;
@@ -29,10 +29,12 @@ function buildTaxInputs(
   realizedGains: number,
   state: string,
   age: number,
+  spouseAge: number | null,
 ): TaxInputs {
   return {
     filing_status: scenario.filingStatus,
     age,
+    spouse_age: spouseAge ?? 0,
     wages_income: ordinaryIncome,
     capital_gains: realizedGains,
     state,
@@ -101,15 +103,12 @@ export function simulateYear(
   const ssGross = ssPrimary + ssSpouse;
   const rmd = calcRMD(open.taxDeferred, age);
 
-  // ── SS taxable portion (depends on other ordinary income, so iterate once) ──
-  let ssTaxable = taxableSSPortion(ssGross, wages + pension + rmd, 0, fs);
-
   // ── Conversion (depends on ordinary income BEFORE conversion) ─────────────
-  // Estimate ordinary + taxable income to feed the strategy resolver
+  const initialSSTaxable = taxableSSPortion(ssGross, wages + pension + rmd, 0, fs);
   const stdDed = rules.federal.standard_deduction[fs] ?? 0;
-  const ordinaryBeforeConversion = wages + pension + ssTaxable + rmd;
+  const ordinaryBeforeConversion = wages + pension + initialSSTaxable + rmd;
   const taxableIncomeBeforeConversion = Math.max(0, ordinaryBeforeConversion - stdDed);
-  const conversion = resolveConversion(
+  let conversion = resolveConversion(
     scenario.strategy,
     age,
     ordinaryBeforeConversion,
@@ -119,116 +118,162 @@ export function simulateYear(
     Math.max(0, open.taxDeferred - rmd),
   );
 
-  // ── Cash flow: solve for discretionary withdrawal ─────────────────────────
-  const spendingNeeded = scenario.annualSpending * inflationFactor;
+  // ── Full-year solver for a given conversion amount ─────────────────────────
+  // Recomputable so the fill-bracket strategy can correct itself if the
+  // conversion (plus the ordinary withdrawals that fund spending + tax) would
+  // spill into a higher bracket or trip an IRMAA tier.
+  function computeYear(conv: number) {
+    const spendingNeeded = scenario.annualSpending * inflationFactor;
 
-  // First pass: tax with no discretionary withdrawal
-  let ordinary = wages + pension + ssTaxable + rmd + conversion;
-  let realized = 0;
-  let workingBal: AccountBalances = { ...open };
-  // Apply conversion to balances now (it doesn't generate cash)
-  workingBal.taxDeferred -= conversion;
-  workingBal.taxFree += conversion;
-  // Apply RMD to balances (cash leaves taxDeferred)
-  workingBal.taxDeferred -= rmd;
+    let ssTaxable = taxableSSPortion(ssGross, wages + pension + rmd, 0, fs);
+    let ordinary = wages + pension + ssTaxable + rmd + conv;
+    let realized = 0;
+    let workingBal: AccountBalances = { ...open };
+    // Apply conversion to balances now (it doesn't generate cash)
+    workingBal.taxDeferred -= conv;
+    workingBal.taxFree += conv;
+    // Apply RMD to balances (cash leaves taxDeferred)
+    workingBal.taxDeferred -= rmd;
 
-  let taxInputs = buildTaxInputs(scenario, ordinary, realized, state, age);
-  let taxResult = interpret(rules, taxInputs);
+    let taxInputs = buildTaxInputs(scenario, ordinary, realized, state, age, spouseAge);
+    let taxResult = interpret(rules, taxInputs);
 
-  // ── IRMAA (Medicare surcharge) — based on MAGI from 2 years prior ─────────
-  // IRMAA tier depends on Y-2 MAGI; it's independent of this year's tax calc,
-  // but it IS a cash outflow, so it must be added to `needed` below.
-  const irmaa = (scenario.includeIRMAA && magiLookback != null && magiLookback >= 0)
-    ? irmaaSurcharge(magiLookback, fs, year, scenario.inflationRate, age, spouseAge)
-    : { tier: 0, tierLabel: scenario.includeIRMAA ? 'Pre-Medicare' : 'IRMAA off', partBAnnual: 0, partDAnnual: 0, totalAnnual: 0, payers: 0, magiUsed: magiLookback ?? 0 };
+    // ── IRMAA (Medicare surcharge) — based on MAGI from 2 years prior ─────────
+    const irmaa = (scenario.includeIRMAA && magiLookback != null && magiLookback >= 0)
+      ? irmaaSurcharge(magiLookback, fs, year, scenario.inflationRate, age, spouseAge)
+      : { tier: 0, tierLabel: scenario.includeIRMAA ? 'Pre-Medicare' : 'IRMAA off', partBAnnual: 0, partDAnnual: 0, totalAnnual: 0, payers: 0, magiUsed: magiLookback ?? 0 };
 
-  let cashIn = wages + pension + ssGross + rmd;
-  let needed = spendingNeeded + taxResult.totalTax + irmaa.totalAnnual - cashIn;
+    let cashIn = wages + pension + ssGross + rmd;
+    let needed = spendingNeeded + taxResult.totalTax + irmaa.totalAnnual - cashIn;
 
-  // Discretionary withdrawals per scenario.withdrawalOrder
-  const wd: WithdrawalBreakdown = { ...ZERO_WD };
-  let shortfall = 0;
+    // Discretionary withdrawals per scenario.withdrawalOrder — loop until
+    // cash need is satisfied (or all accounts are dry) so the gross-up
+    // converges instead of mis-reporting a shortfall.
+    const wd: WithdrawalBreakdown = { ...ZERO_WD };
+    let shortfall = 0;
 
-  if (needed > 0) {
-    for (const acc of scenario.withdrawalOrder) {
-      if (needed <= 0) break;
-      // Gross up estimate based on marginal rate at this point
-      let grossNeeded: number;
-      if (acc === 'taxDeferred') {
-        const mr = taxResult.marginalRate || 0.22;
-        grossNeeded = needed / Math.max(0.01, 1 - mr);
-      } else if (acc === 'taxable') {
-        const basisFrac = workingBal.taxable > 0 ? workingBal.basis / workingBal.taxable : 1;
-        const effCG = 0.15 * (1 - basisFrac); // approximate cap-gains rate on the gain portion
-        grossNeeded = needed / Math.max(0.5, 1 - effCG);
-      } else {
-        grossNeeded = needed;
+    if (needed > 0) {
+      for (let pass = 0; pass < 8 && needed > 0; pass++) {
+        let progressed = false;
+        for (const acc of scenario.withdrawalOrder) {
+          if (needed <= 0) break;
+          // Gross up estimate based on marginal rate at this point
+          let grossNeeded: number;
+          if (acc === 'taxDeferred') {
+            const mr = taxResult.marginalRate || 0.22;
+            grossNeeded = needed / Math.max(0.01, 1 - mr);
+          } else if (acc === 'taxable') {
+            const basisFrac = workingBal.taxable > 0 ? workingBal.basis / workingBal.taxable : 1;
+            const effCG = 0.15 * (1 - basisFrac); // approximate cap-gains rate on the gain portion
+            grossNeeded = needed / Math.max(0.5, 1 - effCG);
+          } else {
+            grossNeeded = needed;
+          }
+          const { drawn, realized: rg, newBal } = drawFrom(acc, grossNeeded, workingBal);
+          if (drawn <= 0) continue;
+          workingBal = newBal;
+          wd[acc] += drawn;
+          realized += rg;
+          if (acc === 'taxDeferred') ordinary += drawn;
+          // Recompute tax with updated income
+          taxInputs = buildTaxInputs(scenario, ordinary, realized, state, age, spouseAge);
+          taxResult = interpret(rules, taxInputs);
+          cashIn = wages + pension + ssGross + rmd + wd.taxable + wd.taxDeferred + wd.taxFree;
+          needed = spendingNeeded + taxResult.totalTax + irmaa.totalAnnual - cashIn;
+          progressed = true;
+        }
+        if (!progressed) break;
       }
-      const { drawn, realized: rg, newBal } = drawFrom(acc, grossNeeded, workingBal);
-      workingBal = newBal;
-      wd[acc] += drawn;
-      realized += rg;
-      if (acc === 'taxDeferred') ordinary += drawn;
-      // Recompute tax with updated income
-      taxInputs = buildTaxInputs(scenario, ordinary, realized, state, age);
-      taxResult = interpret(rules, taxInputs);
-      cashIn = wages + pension + ssGross + rmd + wd.taxable + wd.taxDeferred + wd.taxFree;
-      needed = spendingNeeded + taxResult.totalTax + irmaa.totalAnnual - cashIn;
+      if (needed > 0) shortfall = needed;
     }
-    if (needed > 0) shortfall = needed;
+
+    // Re-iterate SS taxable in case discretionary tax-deferred wd changed provisional income
+    const newSSTaxable = taxableSSPortion(ssGross, wages + pension + rmd + wd.taxDeferred, 0, fs);
+    if (Math.abs(newSSTaxable - ssTaxable) > 1) {
+      ssTaxable = newSSTaxable;
+      ordinary = wages + pension + ssTaxable + rmd + conv + wd.taxDeferred;
+      taxInputs = buildTaxInputs(scenario, ordinary, realized, state, age, spouseAge);
+      taxResult = interpret(rules, taxInputs);
+    }
+
+    // ── Apply growth at year-end ──────────────────────────────────────────────
+    const r = overrideReturns ?? {
+      taxDeferred: scenario.returnTaxDeferred,
+      taxFree: scenario.returnTaxFree,
+      taxable: scenario.returnTaxable,
+    };
+    const close: AccountBalances = {
+      taxDeferred: workingBal.taxDeferred * (1 + r.taxDeferred),
+      taxFree: workingBal.taxFree * (1 + r.taxFree),
+      taxable: workingBal.taxable * (1 + r.taxable),
+      basis: workingBal.basis, // simplification: don't grow basis (reinvested gains become unrealized)
+    };
+
+    const ys: YearState = {
+      year,
+      age,
+      spouseAge,
+      open,
+      wages,
+      pension,
+      ssGross,
+      ssTaxable,
+      rmd,
+      conversion: conv,
+      withdrawal: wd,
+      realizedGains: realized,
+      agi: taxResult.grossIncome, // proxy — interpreter doesn't return AGI separately
+      magi: taxResult.magi,
+      taxableIncome: taxResult.taxableIncome,
+      federalTax: taxResult.federalTax + (taxResult.surtaxes['niit'] ?? 0),
+      stateTax: taxResult.stateTax + taxResult.subJurisdictionTax,
+      irmaaPartB: irmaa.partBAnnual,
+      irmaaPartD: irmaa.partDAnnual,
+      irmaaTier: irmaa.tier,
+      irmaaTierLabel: irmaa.tierLabel,
+      irmaaMagiUsed: irmaa.magiUsed,
+      totalTax: taxResult.totalTax + irmaa.totalAnnual,
+      marginalRate: taxResult.marginalRate,
+      effectiveRate: taxResult.effectiveTotalRate,
+      spendingNeeded,
+      spendingShortfall: shortfall,
+      close,
+      inflationFactor,
+    };
+
+    return { ys, marginalRate: taxResult.marginalRate, taxableIncome: taxResult.taxableIncome, magi: taxResult.magi };
   }
 
-  // Re-iterate SS taxable in case discretionary tax-deferred wd changed provisional income
-  const newSSTaxable = taxableSSPortion(ssGross, wages + pension + rmd + wd.taxDeferred, 0, fs);
-  if (Math.abs(newSSTaxable - ssTaxable) > 1) {
-    ssTaxable = newSSTaxable;
-    ordinary = wages + pension + ssTaxable + rmd + conversion + wd.taxDeferred;
-    taxInputs = buildTaxInputs(scenario, ordinary, realized, state, age);
-    taxResult = interpret(rules, taxInputs);
+  let result = computeYear(conversion);
+
+  // ── Fill-bracket self-correction ───────────────────────────────────────────
+  // The resolver sizes the conversion against pre-conversion income only, but
+  // spending + the conversion's own tax are often funded by additional taxable
+  // withdrawals. If those push taxable income past the target bracket (or past
+  // the no-IRMAA tier), pull the conversion back so the marginal rate stays
+  // where the strategy promised it would.
+  if (scenario.strategy.mode === 'fill-bracket') {
+    const target = scenario.strategy.targetMarginalRate;
+    const ceiling = bracketCeilingFor(rules, fs, target);
+    if (ceiling != null && result.marginalRate > target + 1e-9 && conversion > 0) {
+      const spill = result.taxableIncome - ceiling;
+      if (spill > 0) {
+        conversion = Math.max(0, conversion - spill);
+        result = computeYear(conversion);
+      }
+    }
+    const avoidIRMAA = (scenario.strategy as { avoidIRMAA?: boolean }).avoidIRMAA !== false;
+    if (avoidIRMAA && scenario.includeIRMAA && conversion > 0) {
+      const medicareWithin2Years = age + 2 >= 65 || (spouseAge != null && spouseAge + 2 >= 65);
+      if (medicareWithin2Years) {
+        const tier0Ceiling = irmaaNoSurchargeCeiling(fs, year + 2, scenario.inflationRate);
+        if (tier0Ceiling != null && result.magi > tier0Ceiling) {
+          conversion = Math.max(0, conversion - (result.magi - tier0Ceiling));
+          result = computeYear(conversion);
+        }
+      }
+    }
   }
 
-  // ── Apply growth at year-end ──────────────────────────────────────────────
-  const r = overrideReturns ?? {
-    taxDeferred: scenario.returnTaxDeferred,
-    taxFree: scenario.returnTaxFree,
-    taxable: scenario.returnTaxable,
-  };
-  const close: AccountBalances = {
-    taxDeferred: workingBal.taxDeferred * (1 + r.taxDeferred),
-    taxFree: workingBal.taxFree * (1 + r.taxFree),
-    taxable: workingBal.taxable * (1 + r.taxable),
-    basis: workingBal.basis, // simplification: don't grow basis (reinvested gains become unrealized)
-  };
-
-  return {
-    year,
-    age,
-    spouseAge,
-    open,
-    wages,
-    pension,
-    ssGross,
-    ssTaxable,
-    rmd,
-    conversion,
-    withdrawal: wd,
-    realizedGains: realized,
-    agi: taxResult.grossIncome, // proxy — interpreter doesn't return AGI separately
-    magi: taxResult.magi,
-    taxableIncome: taxResult.taxableIncome,
-    federalTax: taxResult.federalTax + (taxResult.surtaxes['niit'] ?? 0),
-    stateTax: taxResult.stateTax + taxResult.subJurisdictionTax,
-    irmaaPartB: irmaa.partBAnnual,
-    irmaaPartD: irmaa.partDAnnual,
-    irmaaTier: irmaa.tier,
-    irmaaTierLabel: irmaa.tierLabel,
-    irmaaMagiUsed: irmaa.magiUsed,
-    totalTax: taxResult.totalTax + irmaa.totalAnnual,
-    marginalRate: taxResult.marginalRate,
-    effectiveRate: taxResult.effectiveTotalRate,
-    spendingNeeded,
-    spendingShortfall: shortfall,
-    close,
-    inflationFactor,
-  };
+  return result.ys;
 }
