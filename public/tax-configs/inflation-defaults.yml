@@ -1,0 +1,27 @@
+# National average spending shares and annual inflation growth rates.
+# Sources: BLS Consumer Expenditure Survey (2023) for weights,
+#          BLS CPI-U 20-yr annualized averages (2005–2025) for growth.
+#
+# These are read-only reference values displayed alongside user inputs.
+# To override, edit the values below — the UI always shows these as
+# the "national avg" column.
+
+housing:
+  weight: 33        # % of consumer spending (BLS CE 2023)
+  growth: 3.8       # % annual (CPI shelter, 20-yr CAGR)
+
+healthcare:
+  weight: 8
+  growth: 2.7
+
+food:
+  weight: 13
+  growth: 3.4
+
+transportation:
+  weight: 16
+  growth: 3.1
+
+other:
+  weight: 30        # apparel, recreation, education, misc
+  growth: 2.8

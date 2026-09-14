@@ -7,6 +7,7 @@ import { annualSSForYear, taxableSSPortion } from './socialSecurity';
 import { projectRules } from './projectRules';
 import { resolveConversion, bracketCeilingFor } from './conversionStrategy';
 import { irmaaSurcharge, irmaaNoSurchargeCeiling } from './irmaa';
+import { blendedInflationRate, expenseInflationFactor } from './inflation';
 
 interface SimContext {
   baseRules: TaxRules;
@@ -81,14 +82,18 @@ export function simulateYear(
   const spouseAge = scenario.spouseAge > 0 ? scenario.spouseAge + (age - scenario.currentAge) : null;
   const year = ctx.startYear + (age - scenario.currentAge);
   const yearsSinceBase = age - scenario.currentAge;
-  const inflationFactor = Math.pow(1 + scenario.inflationRate, yearsSinceBase);
+  // Spending/wages/pension grow with the category-weighted basket; each
+  // category compounds at its own rate (expenseInflationFactor).
+  const inflationFactor = expenseInflationFactor(scenario.inflation, yearsSinceBase);
+  // Tax brackets & IRMAA thresholds are indexed to a single blended rate.
+  const blendRate = blendedInflationRate(scenario.inflation);
 
   const open: AccountBalances = prev == null
     ? { taxDeferred: scenario.taxDeferred, taxFree: scenario.taxFree, taxable: scenario.taxable, basis: scenario.taxableBasis }
     : { ...prev.close };
 
   // Project the tax rules to this calendar year (handles TCJA sunset + inflation of brackets)
-  const rules = projectRules(ctx.baseRules, year, scenario.inflationRate, scenario.taxLawMode);
+  const rules = projectRules(ctx.baseRules, year, blendRate, scenario.taxLawMode);
   const fs = scenario.filingStatus;
   const isWorking = age < scenario.retireAge;
   const state = isWorking ? scenario.currentState : scenario.retirementState;
@@ -140,7 +145,7 @@ export function simulateYear(
 
     // ── IRMAA (Medicare surcharge) — based on MAGI from 2 years prior ─────────
     const irmaa = (scenario.includeIRMAA && magiLookback != null && magiLookback >= 0)
-      ? irmaaSurcharge(magiLookback, fs, year, scenario.inflationRate, age, spouseAge)
+      ? irmaaSurcharge(magiLookback, fs, year, blendRate, age, spouseAge)
       : { tier: 0, tierLabel: scenario.includeIRMAA ? 'Pre-Medicare' : 'IRMAA off', partBAnnual: 0, partDAnnual: 0, totalAnnual: 0, payers: 0, magiUsed: magiLookback ?? 0 };
 
     let cashIn = wages + pension + ssGross + rmd;
@@ -266,7 +271,7 @@ export function simulateYear(
     if (avoidIRMAA && scenario.includeIRMAA && conversion > 0) {
       const medicareWithin2Years = age + 2 >= 65 || (spouseAge != null && spouseAge + 2 >= 65);
       if (medicareWithin2Years) {
-        const tier0Ceiling = irmaaNoSurchargeCeiling(fs, year + 2, scenario.inflationRate);
+        const tier0Ceiling = irmaaNoSurchargeCeiling(fs, year + 2, blendRate);
         if (tier0Ceiling != null && result.magi > tier0Ceiling) {
           conversion = Math.max(0, conversion - (result.magi - tier0Ceiling));
           result = computeYear(conversion);

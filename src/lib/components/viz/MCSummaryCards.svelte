@@ -2,6 +2,7 @@
   import { mcResultStore } from '../../stores/mc';
   import { scenarioStore } from '../../stores/scenario';
   import { displayModeStore } from '../../stores/path';
+  import { expenseInflationFactor } from '../../sim/inflation';
   import type { PercentileBand } from '../../sim/monteCarlo';
 
   function fmt(n: number): string {
@@ -15,7 +16,7 @@
   $: lastFactor = (() => {
     if (!$mcResultStore) return 1;
     const horizon = $mcResultStore.totalBalanceByAge.length;
-    return Math.pow(1 + $scenarioStore.inflationRate, Math.max(0, horizon - 1));
+    return expenseInflationFactor($scenarioStore.inflation, Math.max(0, horizon - 1));
   })();
   $: convert = (n: number) => $displayModeStore === 'real' ? n / lastFactor : n;
 

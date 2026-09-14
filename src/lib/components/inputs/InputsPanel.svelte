@@ -1,6 +1,8 @@
 <script lang="ts">
   import { scenarioStore, resetScenario } from '../../stores/scenario';
   import { rulesStore } from '../../stores/rules';
+  import { blendedInflationRate } from '../../sim/inflation';
+  import { inflationDefaultsStore } from '../../stores/inflationDefaults';
   import NumberInput from './NumberInput.svelte';
   import SelectInput from './SelectInput.svelte';
   import PerYearConversionEditor from './PerYearConversionEditor.svelte';
@@ -43,6 +45,16 @@
       return s;
     });
   }
+
+  // "Everything else" always makes up the remainder: 100% − the four named buckets.
+  $: otherWeight = Math.max(0, 1 - (
+    $scenarioStore.inflation.housing.weight +
+    $scenarioStore.inflation.healthcare.weight +
+    $scenarioStore.inflation.food.weight +
+    $scenarioStore.inflation.transportation.weight
+  ));
+  $: otherWeightPct = (otherWeight * 100).toFixed(1);
+  $: blendedPct = (blendedInflationRate($scenarioStore.inflation) * 100).toFixed(2);
 </script>
 
 <aside class="panel">
@@ -126,7 +138,55 @@
   <section>
     <h3>Spending & inflation</h3>
     <NumberInput label="Annual spending (today's $)" prefix="$" bind:value={$scenarioStore.annualSpending} min={0} max={500000} step={2500} withSlider />
-    <NumberInput label="Inflation rate" bind:value={$scenarioStore.inflationRate} min={0} max={0.08} step={0.0025} withSlider />
+
+    <div class="blend" title="Weighted average of each category's growth rate. The basket also compounds category-by-category for every simulated year.">
+      <div class="blend-value">{blendedPct}%</div>
+      <div class="blend-label">blended inflation rate</div>
+    </div>
+
+    <table class="infl-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Share</th>
+          <th>Growth</th>
+          <th class="nat">Nat'l avg</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cat-name">Housing</td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.housing.weight} min={0} max={100} step={0.1} percent free /></td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.housing.rate} min={0} max={100} step={0.001} percent free /></td>
+          <td class="nat">{$inflationDefaultsStore.housing.weight}% · {$inflationDefaultsStore.housing.growth}%</td>
+        </tr>
+        <tr>
+          <td class="cat-name">Healthcare</td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.healthcare.weight} min={0} max={100} step={0.1} percent free /></td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.healthcare.rate} min={0} max={100} step={0.001} percent free /></td>
+          <td class="nat">{$inflationDefaultsStore.healthcare.weight}% · {$inflationDefaultsStore.healthcare.growth}%</td>
+        </tr>
+        <tr>
+          <td class="cat-name">Food</td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.food.weight} min={0} max={100} step={0.1} percent free /></td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.food.rate} min={0} max={100} step={0.001} percent free /></td>
+          <td class="nat">{$inflationDefaultsStore.food.weight}% · {$inflationDefaultsStore.food.growth}%</td>
+        </tr>
+        <tr>
+          <td class="cat-name">Transport</td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.transportation.weight} min={0} max={100} step={0.1} percent free /></td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.transportation.rate} min={0} max={100} step={0.001} percent free /></td>
+          <td class="nat">{$inflationDefaultsStore.transportation.weight}% · {$inflationDefaultsStore.transportation.growth}%</td>
+        </tr>
+        <tr class="computed-row">
+          <td class="cat-name other">Other</td>
+          <td class="auto-val">{otherWeightPct}%</td>
+          <td><NumberInput label="" bind:value={$scenarioStore.inflation.otherRate} min={0} max={100} step={0.001} percent free /></td>
+          <td class="nat">{$inflationDefaultsStore.other.weight}% · {$inflationDefaultsStore.other.growth}%</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="infl-hint">Defaults are 20-yr CPI averages (2005–2025). Nat'l avg = BLS reference, not your basket.</p>
   </section>
 
   <section>
@@ -204,4 +264,45 @@
     border-radius: 3px;
     margin: 4px 0 10px;
   }
+  .blend {
+    display: flex; align-items: baseline; gap: 8px;
+    background: #eff6ff;
+    border-left: 3px solid #2a4d8f;
+    border-radius: 3px;
+    padding: 6px 10px;
+    margin: 4px 0 10px;
+    cursor: help;
+  }
+  .blend-value { font-size: 18px; font-weight: 700; color: #1e3a8a; font-variant-numeric: tabular-nums; }
+  .blend-label { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.4px; }
+  .infl-hint { font-size: 10.5px; color: #6b7280; line-height: 1.3; margin: 6px 0 0; }
+  .infl-table {
+    width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 0;
+  }
+  .infl-table th {
+    font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase;
+    letter-spacing: 0.4px; text-align: left; padding: 0 2px 3px;
+  }
+  .infl-table th.nat { text-align: right; }
+  .infl-table td { padding: 2px 2px; vertical-align: middle; }
+  .infl-table .cat-name {
+    font-size: 12px; font-weight: 600; color: #1e3a8a; white-space: nowrap;
+    padding-right: 6px;
+  }
+  .infl-table .cat-name.other { color: #92400e; }
+  .infl-table .nat {
+    font-size: 10.5px; color: #94a3b8; text-align: right; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .infl-table .auto-val {
+    font-size: 12px; font-weight: 600; color: #92400e;
+    font-variant-numeric: tabular-nums; padding: 0 4px;
+  }
+  .infl-table :global(.row) { margin-bottom: 0; }
+  .infl-table :global(.num) { width: 64px; font-size: 12px; padding: 2px 4px; }
+  .infl-table :global(.num.free) { width: 64px; }
+  .infl-table :global(.row-head),
+  .infl-table :global(.suffix) { display: none; }
+  .infl-table :global(.row-controls) { gap: 2px; }
+  .computed-row { opacity: 0.85; }
 </style>

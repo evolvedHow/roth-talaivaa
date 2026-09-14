@@ -34,6 +34,62 @@ export type ConversionStrategy =
 
 export type TaxLawMode = 'freeze-current' | 'tcja-sunset';
 
+// One expense category in the weighted-inflation basket.
+// `weight` is the category's share of total annual spending (0–1, e.g. 0.30 = 30%).
+// `rate` is the category's annual price growth (e.g. 0.035 = 3.5%).
+export interface InflationCategoryConfig {
+  weight: number;
+  rate: number;
+}
+
+// Weighted spending inflation. Each expense category grows at its own rate, and
+// the basket compounds each category separately (a true weighted CPI).
+// "Everything else" (other) has no stored weight — it is always derived as
+//   1 − (housing + healthcare + food + transportation).
+export interface InflationBreakdown {
+  housing: InflationCategoryConfig;
+  healthcare: InflationCategoryConfig;
+  food: InflationCategoryConfig;
+  transportation: InflationCategoryConfig;
+  otherRate: number; // growth rate of the residual "everything else" slice
+}
+
+// Historical CPI defaults — 20-year annualized CAGRs from H1 2005 → H1 2025,
+// per the BLS CPI-U series (shelter, medical care, food, transportation via
+// FRED). The "everything else" default is the approximate residual-basket
+// inflation (apparel, recreation, education, etc.).
+export function defaultInflationBreakdown(): InflationBreakdown {
+  return {
+    housing: { weight: 0.30, rate: 0.031 },
+    healthcare: { weight: 0.15, rate: 0.030 },
+    food: { weight: 0.12, rate: 0.029 },
+    transportation: { weight: 0.10, rate: 0.024 },
+    otherRate: 0.020,
+  };
+}
+
+// Backfill the weighted-inflation breakdown for scenarios that predate it
+// (e.g. old saved profiles carrying a single `inflationRate`). Missing
+// breakdowns become a flat basket where every category inflates at the legacy
+// rate, preserving the old behavior.
+export function normalizeInflation(
+  scenario: {
+    inflation?: InflationBreakdown;
+    inflationRate?: number;
+  },
+): InflationBreakdown {
+  if (scenario.inflation) return scenario.inflation;
+  const rate = scenario.inflationRate ?? 0.025;
+  const base = defaultInflationBreakdown();
+  return {
+    housing: { weight: base.housing.weight, rate },
+    healthcare: { weight: base.healthcare.weight, rate },
+    food: { weight: base.food.weight, rate },
+    transportation: { weight: base.transportation.weight, rate },
+    otherRate: rate,
+  };
+}
+
 export interface ScenarioInputs {
   // Household
   currentAge: number;
@@ -60,8 +116,8 @@ export interface ScenarioInputs {
 
   // Spending plan (today's dollars)
   annualSpending: number;
-  inflationRate: number;      // e.g. 0.025
-  ssCOLA: number;             // e.g. 0.025 — defaults to inflationRate in UI
+  inflation: InflationBreakdown; // weighted, per-category growth (see helpers)
+  ssCOLA: number;             // e.g. 0.025 — independent of inflation breakdown
 
   // Expected per-account returns (Phase 1 = deterministic constants)
   returnTaxDeferred: number;
@@ -110,7 +166,7 @@ export function defaultScenario(): ScenarioInputs {
     pensionStartAge: 65,
 
     annualSpending: 90000,
-    inflationRate: 0.025,
+    inflation: defaultInflationBreakdown(),
     ssCOLA: 0.025,
 
     returnTaxDeferred: 0.06,

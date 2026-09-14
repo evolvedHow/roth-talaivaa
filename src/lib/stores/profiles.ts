@@ -1,5 +1,5 @@
 import { writable, get, derived } from 'svelte/store';
-import { defaultScenario, type ScenarioInputs } from '../types/scenario';
+import { defaultScenario, normalizeInflation, type ScenarioInputs } from '../types/scenario';
 import { scenarioStore } from './scenario';
 
 const STORAGE_KEY = 'rta:profiles:v1';
@@ -46,6 +46,28 @@ function seededProfiles(): Record<string, Profile> {
   return profiles;
 }
 
+// Backfill the weighted-inflation breakdown on profiles saved before it existed
+// (they carried a single `inflationRate`). Preserves legacy behavior.
+function normalizeProfileScenario(s: Record<string, unknown> & { inflation?: unknown; inflationRate?: number }): ScenarioInputs {
+  const { inflationRate, ...rest } = s;
+  const base = rest as unknown as ScenarioInputs;
+  return {
+    ...base,
+    inflation: normalizeInflation({ inflation: s.inflation as ScenarioInputs['inflation'], inflationRate }),
+  };
+}
+
+function normalizeProfiles(profiles: Record<string, Profile>): Record<string, Profile> {
+  const next: Record<string, Profile> = {};
+  for (const [name, p] of Object.entries(profiles)) {
+    next[name] = {
+      ...p,
+      scenario: normalizeProfileScenario(p.scenario as unknown as Record<string, unknown>),
+    };
+  }
+  return next;
+}
+
 function loadFromStorage(): ProfileStoreState {
   if (typeof localStorage === 'undefined') {
     return { profiles: seededProfiles(), activeName: 'Default' };
@@ -58,7 +80,7 @@ function loadFromStorage(): ProfileStoreState {
       saveToStorage({ profiles: seeded, activeName: 'Default' });
       return { profiles: seeded, activeName: 'Default' };
     }
-    const profiles = JSON.parse(raw) as Record<string, Profile>;
+    const profiles = normalizeProfiles(JSON.parse(raw) as Record<string, Profile>);
     return { profiles, activeName: active };
   } catch {
     return { profiles: seededProfiles(), activeName: 'Default' };
@@ -170,7 +192,7 @@ export function importProfilesJSON(json: string, mode: 'merge' | 'replace' = 'me
       const next: Record<string, Profile> = mode === 'replace' ? {} : { ...s.profiles };
       for (const [name, p] of Object.entries(parsed.profiles)) {
         if (next[name]) replaced++; else added++;
-        next[name] = p;
+        next[name] = { ...p, scenario: normalizeProfileScenario(p.scenario as unknown as Record<string, unknown>) };
       }
       const activeName = s.activeName && next[s.activeName] ? s.activeName : Object.keys(next)[0] ?? null;
       return { ...s, profiles: next, activeName };

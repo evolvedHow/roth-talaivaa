@@ -4,6 +4,7 @@
   import { mcResultStore } from '../../stores/mc';
   import { scenarioStore } from '../../stores/scenario';
   import { displayModeStore } from '../../stores/path';
+  import { expenseInflationFactor } from '../../sim/inflation';
   import type { AgeBand } from '../../sim/monteCarlo';
 
   export let title: string;
@@ -18,10 +19,10 @@
     if (!$mcResultStore) return [] as AgeBand[];
     const raw = $mcResultStore[series];
     if ($displayModeStore === 'nominal') return raw;
-    // Real-dollar adjustment: divide by inflation factor compounded from base
-    const infl = $scenarioStore.inflationRate;
+    // Real-dollar adjustment: divide by the category-weighted inflation factor
+    const infl = $scenarioStore.inflation;
     return raw.map((b, i) => {
-      const factor = Math.pow(1 + infl, i);
+      const factor = expenseInflationFactor(infl, i);
       return {
         age: b.age,
         bands: {
