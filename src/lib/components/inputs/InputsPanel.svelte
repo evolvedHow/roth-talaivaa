@@ -25,6 +25,14 @@
     { value: 'tcja-sunset', label: 'Model TCJA sunset in 2026' },
   ];
 
+  type InflationCat = 'housing' | 'healthcare' | 'food' | 'transportation';
+  const inflCats: Array<[string, InflationCat]> = [
+    ['Housing', 'housing'],
+    ['Healthcare', 'healthcare'],
+    ['Food', 'food'],
+    ['Transport', 'transportation'],
+  ];
+
   let showAdvanced = false;
 
   function onStrategyMode(e: Event) {
@@ -55,6 +63,26 @@
   ));
   $: otherWeightPct = (otherWeight * 100).toFixed(1);
   $: blendedPct = (blendedInflationRate($scenarioStore.inflation) * 100).toFixed(2);
+
+  // Plain-input handlers: display as % (e.g. 3.1), store as decimal (0.031).
+  function inflPct(value: number): string {
+    return String(+(value * 100).toPrecision(4));
+  }
+  function onWeight(cat: InflationCat, e: Event) {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (!Number.isFinite(v) || v < 0 || v > 100) return;
+    scenarioStore.update(s => { s.inflation[cat].weight = v / 100; return s; });
+  }
+  function onRate(cat: InflationCat, e: Event) {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (!Number.isFinite(v) || v < 0 || v > 100) return;
+    scenarioStore.update(s => { s.inflation[cat].rate = v / 100; return s; });
+  }
+  function onOtherRate(e: Event) {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (!Number.isFinite(v) || v < 0 || v > 100) return;
+    scenarioStore.update(s => { s.inflation.otherRate = v / 100; return s; });
+  }
 </script>
 
 <aside class="panel">
@@ -154,34 +182,24 @@
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td class="cat-name">Housing</td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.housing.weight} min={0} max={100} step={0.1} percent free /></td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.housing.rate} min={0} max={100} step={0.001} percent free /></td>
-          <td class="nat">{$inflationDefaultsStore.housing.weight}% · {$inflationDefaultsStore.housing.growth}%</td>
-        </tr>
-        <tr>
-          <td class="cat-name">Healthcare</td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.healthcare.weight} min={0} max={100} step={0.1} percent free /></td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.healthcare.rate} min={0} max={100} step={0.001} percent free /></td>
-          <td class="nat">{$inflationDefaultsStore.healthcare.weight}% · {$inflationDefaultsStore.healthcare.growth}%</td>
-        </tr>
-        <tr>
-          <td class="cat-name">Food</td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.food.weight} min={0} max={100} step={0.1} percent free /></td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.food.rate} min={0} max={100} step={0.001} percent free /></td>
-          <td class="nat">{$inflationDefaultsStore.food.weight}% · {$inflationDefaultsStore.food.growth}%</td>
-        </tr>
-        <tr>
-          <td class="cat-name">Transport</td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.transportation.weight} min={0} max={100} step={0.1} percent free /></td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.transportation.rate} min={0} max={100} step={0.001} percent free /></td>
-          <td class="nat">{$inflationDefaultsStore.transportation.weight}% · {$inflationDefaultsStore.transportation.growth}%</td>
-        </tr>
+        {#each inflCats as [label, cat]}
+          <tr>
+            <td class="cat-name">{label}</td>
+            <td><input class="infl-input" type="text" inputmode="decimal"
+                  value={inflPct($scenarioStore.inflation[cat].weight)}
+                  on:change={e => onWeight(cat, e)} /></td>
+            <td><input class="infl-input" type="text" inputmode="decimal"
+                  value={inflPct($scenarioStore.inflation[cat].rate)}
+                  on:change={e => onRate(cat, e)} /></td>
+            <td class="nat">{$inflationDefaultsStore[cat].weight}% · {$inflationDefaultsStore[cat].growth}%</td>
+          </tr>
+        {/each}
         <tr class="computed-row">
           <td class="cat-name other">Other</td>
           <td class="auto-val">{otherWeightPct}%</td>
-          <td><NumberInput label="" bind:value={$scenarioStore.inflation.otherRate} min={0} max={100} step={0.001} percent free /></td>
+          <td><input class="infl-input" type="text" inputmode="decimal"
+                value={inflPct($scenarioStore.inflation.otherRate)}
+                on:change={onOtherRate} /></td>
           <td class="nat">{$inflationDefaultsStore.other.weight}% · {$inflationDefaultsStore.other.growth}%</td>
         </tr>
       </tbody>
@@ -298,11 +316,10 @@
     font-size: 12px; font-weight: 600; color: #92400e;
     font-variant-numeric: tabular-nums; padding: 0 4px;
   }
-  .infl-table :global(.row) { margin-bottom: 0; }
-  .infl-table :global(.num) { width: 64px; font-size: 12px; padding: 2px 4px; }
-  .infl-table :global(.num.free) { width: 64px; }
-  .infl-table :global(.row-head),
-  .infl-table :global(.suffix) { display: none; }
-  .infl-table :global(.row-controls) { gap: 2px; }
+  .infl-input {
+    width: 64px; padding: 2px 4px; border: 1px solid #ccc; border-radius: 3px;
+    font-size: 12px; font-family: monospace; text-align: right;
+  }
+  .infl-input:focus { outline: 1px solid #2a4d8f; border-color: #2a4d8f; }
   .computed-row { opacity: 0.85; }
 </style>
