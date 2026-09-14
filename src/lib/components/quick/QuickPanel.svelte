@@ -56,6 +56,14 @@
   $: manualAmt = stratMode === 'fixed-annual'
     ? (($scenarioStore.strategy as unknown as { amount: number }).amount ?? 0)
     : 0;
+  let amtModel = 0;
+  $: amtModel = manualAmt;
+  $: if (stratMode === 'fixed-annual' && amtModel !== manualAmt) {
+    scenarioStore.update(s => {
+      if (s.strategy.mode === 'fixed-annual') (s.strategy as unknown as { amount: number }).amount = amtModel;
+      return s;
+    });
+  }
 
   $: windowStart = stratMode === 'fixed-annual' || stratMode === 'fill-bracket'
     ? (($scenarioStore.strategy as unknown as { startAge: number }).startAge ?? $scenarioStore.retireAge)
@@ -63,14 +71,6 @@
   $: windowEnd = stratMode === 'fixed-annual' || stratMode === 'fill-bracket'
     ? (($scenarioStore.strategy as unknown as { endAge: number }).endAge ?? Math.min(72, $scenarioStore.planUntilAge - 1))
     : Math.min(72, $scenarioStore.planUntilAge - 1);
-
-  function onAmount(e: Event) {
-    const v = Number((e.target as HTMLInputElement).value);
-    scenarioStore.update(s => {
-      if (s.strategy.mode === 'fixed-annual') (s.strategy as unknown as { amount: number }).amount = v;
-      return s;
-    });
-  }
 </script>
 
 <aside class="panel">
@@ -80,28 +80,28 @@
 
   <section>
     <h3>About you</h3>
-    <NumberInput label="Your age" bind:value={$scenarioStore.currentAge} min={45} max={85} withSlider help="The plan runs from here to your plan horizon." />
-    <NumberInput label="Plan until age" bind:value={$scenarioStore.planUntilAge} min={70} max={110} withSlider help="How long to simulate. Money left at this age is your terminal net worth." />
-    <NumberInput label="Spouse age (0 = single)" bind:value={$scenarioStore.spouseAge} min={0} max={90} withSlider />
+    <NumberInput label="Your age" bind:value={$scenarioStore.currentAge} min={45} max={85} help="The plan runs from here to your plan horizon." />
+    <NumberInput label="Plan until age" bind:value={$scenarioStore.planUntilAge} min={70} max={110} help="How long to simulate. Money left at this age is your terminal net worth." />
+    <NumberInput label="Spouse age (0 = single)" bind:value={$scenarioStore.spouseAge} min={0} max={90} />
     <SelectInput label="Filing status" bind:value={$scenarioStore.filingStatus} options={filingOptions} />
   </section>
 
   <section>
     <h3>Your money today</h3>
-    <NumberInput label="401(k) / Traditional IRA balance" prefix="$" bind:value={$scenarioStore.taxDeferred} min={0} max={5000000} step={10000} withSlider
+    <NumberInput label="401(k) / Traditional IRA balance" prefix="$" bind:value={$scenarioStore.taxDeferred} min={0} max={5000000} step={10000}
       help="This is the pre-tax pile you're deciding whether to convert. The bigger it is, the more it pays to convert early." />
-    <NumberInput label="Roth balance" prefix="$" bind:value={$scenarioStore.taxFree} min={0} max={5000000} step={10000} withSlider
+    <NumberInput label="Roth balance" prefix="$" bind:value={$scenarioStore.taxFree} min={0} max={5000000} step={10000}
       help="Already tax-free. Conversions land here." />
-    <NumberInput label="After-tax (brokerage) balance" prefix="$" bind:value={$scenarioStore.taxable} min={0} max={5000000} step={10000} withSlider
+    <NumberInput label="After-tax (brokerage) balance" prefix="$" bind:value={$scenarioStore.taxable} min={0} max={5000000} step={10000}
       help="Usually used first to pay the tax on conversions." />
   </section>
 
   <section>
     <h3>Your future income & spending</h3>
-    <NumberInput label="Monthly Social Security at 67 (you)" prefix="$" bind:value={$scenarioStore.ssMonthlyAtFRA} min={0} max={5000} step={50} withSlider />
-    <NumberInput label="Monthly Social Security at 67 (spouse)" prefix="$" bind:value={$scenarioStore.spouseSSMonthlyAtFRA} min={0} max={5000} step={50} withSlider />
-    <NumberInput label="Money you'll spend each year (today's $)" prefix="$" bind:value={$scenarioStore.annualSpending} min={0} max={500000} step={2500} withSlider />
-    <NumberInput label="Retire at age" bind:value={$scenarioStore.retireAge} min={45} max={80} withSlider
+    <NumberInput label="Monthly Social Security at 67 (you)" prefix="$" bind:value={$scenarioStore.ssMonthlyAtFRA} min={0} max={5000} step={50} />
+    <NumberInput label="Monthly Social Security at 67 (spouse)" prefix="$" bind:value={$scenarioStore.spouseSSMonthlyAtFRA} min={0} max={5000} step={50} />
+    <NumberInput label="Money you'll spend each year (today's $)" prefix="$" bind:value={$scenarioStore.annualSpending} min={0} max={500000} step={2500} />
+    <NumberInput label="Retire at age" bind:value={$scenarioStore.retireAge} min={45} max={80}
       help="Conversions happen in the quiet years after you stop working." />
   </section>
 
@@ -119,27 +119,11 @@
       </p>
     {:else}
       <div class="big-lever">
-        <div class="big-label">
-          <span>About how much to convert each year?</span>
-          <span class="big-value">{manualAmt.toLocaleString()}</span>
-        </div>
-        <input
-          type="range"
-          min="0"
-          max="250000"
-          step="5000"
-          value={manualAmt}
-          on:input={onAmount}
-          aria-label="Annual conversion amount"
-        />
-        <div class="big-scale">
-          <span>$0</span>
-          <span>aggressive →</span>
-        </div>
+        <NumberInput label="Convert per year" prefix="$" bind:value={amtModel} min={0} max={250000} step={5000}
+          help="Base annual conversion amount in the window. See the green chart below for the effect of each amount." />
         <p class="mode-note">
-          We'll convert about <strong>${manualAmt.toLocaleString()}/yr</strong> from age {windowStart}
-          to {windowEnd}.
-          Drag the green chart below to see what each amount does.
+          We'll convert about <strong>${amtModel.toLocaleString()}/yr</strong> from age {windowStart}
+          to {windowEnd}. Click the green chart below to see what each amount does.
         </p>
       </div>
     {/if}
@@ -149,14 +133,14 @@
 <style>
   .panel {
     background: white;
-    padding: 14px;
+    padding: 12px 14px;
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  h2 { font-size: 16px; font-weight: 700; }
-  h3 { font-size: 13px; font-weight: 700; color: #2a4d8f; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-  section { padding-bottom: 8px; border-bottom: 1px solid #eee; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  h2 { font-size: 15px; font-weight: 700; }
+  h3 { font-size: 11.5px; font-weight: 700; color: #2a4d8f; margin: 12px 0 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  section { padding-bottom: 6px; border-bottom: 1px solid #eee; }
   section:last-child { border-bottom: none; }
   .pill-row { display: flex; gap: 6px; margin: 4px 0 10px; }
   .pill {
@@ -165,17 +149,14 @@
     cursor: pointer;
   }
   .pill.active { background: #2a4d8f; color: white; border-color: #1e3a8a; }
-  .mode-note { font-size: 12px; color: #475569; line-height: 1.5; margin: 6px 0 0; }
+  .mode-note { font-size: 11px; color: #475569; line-height: 1.4; margin: 5px 0 0; }
   .mode-note strong { color: #1e3a8a; }
   .big-lever {
     background: #eff6ff;
     border-left: 3px solid #2a4d8f;
-    padding: 10px 12px;
+    padding: 6px 9px;
     border-radius: 4px;
+    margin-top: 3px;
   }
-  .big-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-  .big-label span { font-size: 13px; font-weight: 600; color: #1e3a8a; }
-  .big-value { font-family: monospace; font-size: 15px; font-weight: 700; color: #111827; }
-  .big-lever input[type="range"] { width: 100%; accent-color: #2a4d8f; }
-  .big-scale { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; }
+  .big-lever :global(.row:last-child) { margin-bottom: 0; }
 </style>

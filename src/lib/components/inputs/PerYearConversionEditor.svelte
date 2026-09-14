@@ -46,10 +46,6 @@
     });
   }
 
-  function onSlide(age: number, e: Event) {
-    setOverride(age, Number((e.target as HTMLInputElement).value));
-  }
-
   function onBox(age: number, e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
     if (!Number.isFinite(v)) return;
@@ -67,16 +63,13 @@
         title="Clear all per-year overrides">Reset all</button>
     </div>
     <p class="hint">
-      Each year defaults to the base amount above. Slide a row to override that specific year — overridden rows show a <span class="dot"></span> dot. Click ↺ to revert one year.
+      Each year defaults to the base amount above. Type an amount to override a specific year — overridden rows show a <span class="dot"></span> dot. Click ↺ to revert one year.
     </p>
     <div class="rows">
       {#each ages as age (age)}
         <div class="row" class:overridden={isOverridden(age)}>
           <span class="age">{age}</span>
-          <input type="range" min="0" max="300000" step="2500"
-            value={amountFor(age)}
-            on:input={e => onSlide(age, e)}
-            aria-label={`Conversion amount age ${age}`} />
+          <span class="amount">{amountFor(age).toLocaleString()}</span>
           <input class="num" type="number" min="0" step="1000"
             value={amountFor(age)}
             on:change={e => onBox(age, e)}
@@ -116,7 +109,7 @@
   .rows { display: flex; flex-direction: column; gap: 3px; }
   .row {
     display: grid;
-    grid-template-columns: 28px 1fr 64px 18px;
+    grid-template-columns: 30px 1fr 74px 20px;
     gap: 6px;
     align-items: center;
   }
@@ -126,7 +119,10 @@
     border-radius: 50%; background: #f59e0b; margin-left: 3px; vertical-align: middle;
   }
   .age { font-size: 11px; color: #444; font-family: monospace; text-align: right; }
-  .row input[type="range"] { width: 100%; }
+  .amount {
+    font-size: 11px; color: #94a3b8; font-family: monospace;
+    text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .row .num {
     width: 100%;
     padding: 2px 4px; border: 1px solid #ccc; border-radius: 3px;

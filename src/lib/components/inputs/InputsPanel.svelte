@@ -93,57 +93,58 @@
 
   <section>
     <h3>Today's portfolio</h3>
-    <NumberInput label="Tax-deferred (Trad IRA/401k)" prefix="$" bind:value={$scenarioStore.taxDeferred} min={0} max={5000000} step={10000} withSlider
+    <NumberInput label="Tax-deferred (Trad IRA/401k)" prefix="$" bind:value={$scenarioStore.taxDeferred} min={0} max={5000000} step={10000}
       help="Pre-tax balance. This is what generates RMDs at 73." />
-    <NumberInput label="Tax-free (Roth)" prefix="$" bind:value={$scenarioStore.taxFree} min={0} max={5000000} step={10000} withSlider
+    <NumberInput label="Tax-free (Roth)" prefix="$" bind:value={$scenarioStore.taxFree} min={0} max={5000000} step={10000}
       help="Roth IRA / Roth 401(k). Where conversions land. No RMDs." />
-    <NumberInput label="Taxable (brokerage)" prefix="$" bind:value={$scenarioStore.taxable} min={0} max={5000000} step={10000} withSlider
+    <NumberInput label="Taxable (brokerage)" prefix="$" bind:value={$scenarioStore.taxable} min={0} max={5000000} step={10000}
       help="After-tax brokerage. Usually the first bucket to draw from when paying conversion taxes." />
-    <NumberInput label="Taxable cost basis" prefix="$" bind:value={$scenarioStore.taxableBasis} min={0} max={5000000} step={10000} withSlider />
+    <NumberInput label="Taxable cost basis" prefix="$" bind:value={$scenarioStore.taxableBasis} min={0} max={5000000} step={10000} />
   </section>
 
   <section>
     <h3>Household</h3>
-    <NumberInput label="Your age" bind:value={$scenarioStore.currentAge} min={30} max={90} withSlider />
-    <NumberInput label="Spouse age (0 = none)" bind:value={$scenarioStore.spouseAge} min={0} max={90} withSlider />
+    <NumberInput label="Your age" bind:value={$scenarioStore.currentAge} min={30} max={90} step={1} />
+    <NumberInput label="Spouse age (0 = none)" bind:value={$scenarioStore.spouseAge} min={0} max={90} step={1} />
     <SelectInput label="Filing status" bind:value={$scenarioStore.filingStatus} options={filingOptions} />
     <SelectInput label="Retirement state" bind:value={$scenarioStore.retirementState} options={stateOptions} />
   </section>
 
   <section>
     <h3>Income & Social Security</h3>
-    <NumberInput label="Retire at age" bind:value={$scenarioStore.retireAge} min={40} max={80} withSlider
+    <NumberInput label="Retire at age" bind:value={$scenarioStore.retireAge} min={40} max={80} step={1}
       help="Wages stop after this age. The conversion window typically starts here." />
-    <NumberInput label="SS at FRA (monthly, you)" prefix="$" bind:value={$scenarioStore.ssMonthlyAtFRA} min={0} max={5000} step={50} withSlider />
-    <NumberInput label="SS claim age (you)" bind:value={$scenarioStore.ssClaimAge} min={62} max={70} withSlider />
-    <NumberInput label="SS at FRA (spouse)" prefix="$" bind:value={$scenarioStore.spouseSSMonthlyAtFRA} min={0} max={5000} step={50} withSlider />
-    <NumberInput label="SS claim age (spouse)" bind:value={$scenarioStore.spouseSSClaimAge} min={62} max={70} withSlider />
-    <NumberInput label="Pension (annual)" prefix="$" bind:value={$scenarioStore.pensionAnnual} min={0} max={200000} step={1000} withSlider />
-    <NumberInput label="Pension start age" bind:value={$scenarioStore.pensionStartAge} min={50} max={80} withSlider />
+    <NumberInput label="SS at FRA — you (monthly)" prefix="$" bind:value={$scenarioStore.ssMonthlyAtFRA} min={0} max={5000} step={50} />
+    <NumberInput label="SS claim age — you" bind:value={$scenarioStore.ssClaimAge} min={62} max={70} step={1} />
+    <NumberInput label="SS at FRA — spouse (monthly)" prefix="$" bind:value={$scenarioStore.spouseSSMonthlyAtFRA} min={0} max={5000} step={50} />
+    <NumberInput label="SS claim age — spouse" bind:value={$scenarioStore.spouseSSClaimAge} min={62} max={70} step={1} />
+    <NumberInput label="Pension (annual)" prefix="$" bind:value={$scenarioStore.pensionAnnual} min={0} max={200000} step={1000} />
+    <NumberInput label="Pension start age" bind:value={$scenarioStore.pensionStartAge} min={50} max={80} step={1} />
+    <p class="ref">US avg monthly SS benefit ≈ $1,927 (2024).</p>
   </section>
 
   <section>
     <h3>Conversion strategy</h3>
-    <div class="row">
+    <div class="inline-select">
       <label for="strategy-mode">Mode</label>
       <select id="strategy-mode" value={$scenarioStore.strategy.mode} on:change={onStrategyMode}>
-        <option value="none">None (baseline — no conversion)</option>
-        <option value="fixed-annual">Fixed amount per year (with per-year tuning)</option>
-        <option value="fill-bracket">Fill to bracket top (auto-size)</option>
-        <option value="custom">Custom per-age (advanced)</option>
+        <option value="none">None (baseline)</option>
+        <option value="fixed-annual">Fixed amount / yr</option>
+        <option value="fill-bracket">Fill to bracket top</option>
+        <option value="custom">Custom per-age</option>
       </select>
     </div>
 
     {#if $scenarioStore.strategy.mode === 'fixed-annual'}
       <div class="headline-lever">
-        <NumberInput label="Conversion $ per year" prefix="$" bind:value={$scenarioStore.strategy.amount} min={0} max={300000} step={2500} withSlider
+        <NumberInput label="Conversion $ per year" prefix="$" bind:value={$scenarioStore.strategy.amount} min={0} max={300000} step={2500}
           help="Base amount converted each year in the window. Per-year overrides below take precedence." />
       </div>
-      <NumberInput label="Window start age" bind:value={$scenarioStore.strategy.startAge} min={50} max={80} withSlider />
-      <NumberInput label="Window end age" bind:value={$scenarioStore.strategy.endAge} min={50} max={80} withSlider />
+      <NumberInput label="Window start age" bind:value={$scenarioStore.strategy.startAge} min={50} max={80} step={1} />
+      <NumberInput label="Window end age" bind:value={$scenarioStore.strategy.endAge} min={50} max={80} step={1} />
       <PerYearConversionEditor />
     {:else if $scenarioStore.strategy.mode === 'fill-bracket'}
-      <div class="row">
+      <div class="inline-select">
         <label for="target-rate">Fill to top of bracket</label>
         <select id="target-rate" value={String($scenarioStore.strategy.targetMarginalRate)} on:change={onTargetRate}>
           <option value="0.10">10%</option>
@@ -155,17 +156,18 @@
         </select>
       </div>
       <div class="headline-lever">
-        <NumberInput label="Cap conversion $ per year" prefix="$" bind:value={$scenarioStore.strategy.annualCap} min={0} max={300000} step={2500} withSlider
+        <NumberInput label="Cap conversion $ per year" prefix="$" bind:value={$scenarioStore.strategy.annualCap} min={0} max={300000} step={2500}
           help="Limit on the auto-fill amount. 0 = no cap (fills to the bracket top). Drag to constrain — e.g. cap at $80k to see effect of converting less." />
       </div>
-      <NumberInput label="Window start age" bind:value={$scenarioStore.strategy.startAge} min={50} max={80} withSlider />
-      <NumberInput label="Window end age" bind:value={$scenarioStore.strategy.endAge} min={50} max={80} withSlider />
+      <NumberInput label="Window start age" bind:value={$scenarioStore.strategy.startAge} min={50} max={80} step={1} />
+      <NumberInput label="Window end age" bind:value={$scenarioStore.strategy.endAge} min={50} max={80} step={1} />
     {/if}
   </section>
 
   <section>
     <h3>Spending & inflation</h3>
-    <NumberInput label="Annual spending (today's $)" prefix="$" bind:value={$scenarioStore.annualSpending} min={0} max={500000} step={2500} withSlider />
+    <NumberInput label="Annual spending (today's $)" prefix="$" bind:value={$scenarioStore.annualSpending} min={0} max={500000} step={2500}
+      help="Total yearly spending, in today's dollars. Inflates by the basket below." />
 
     <div class="blend" title="Weighted average of each category's growth rate. The basket also compounds category-by-category for every simulated year.">
       <div class="blend-value">{blendedPct}%</div>
@@ -204,21 +206,21 @@
         </tr>
       </tbody>
     </table>
-    <p class="infl-hint">Defaults are 20-yr CPI averages (2005–2025). Nat'l avg = BLS reference, not your basket.</p>
   </section>
 
   <section>
     <h3>Expected returns</h3>
-    <NumberInput label="Tax-deferred" bind:value={$scenarioStore.returnTaxDeferred} min={-0.05} max={0.12} step={0.0025} withSlider />
-    <NumberInput label="Tax-free" bind:value={$scenarioStore.returnTaxFree} min={-0.05} max={0.12} step={0.0025} withSlider />
-    <NumberInput label="Taxable" bind:value={$scenarioStore.returnTaxable} min={-0.05} max={0.12} step={0.0025} withSlider />
+    <NumberInput label="Tax-deferred" bind:value={$scenarioStore.returnTaxDeferred} min={-0.05} max={0.12} step={0.0025} percent />
+    <NumberInput label="Tax-free" bind:value={$scenarioStore.returnTaxFree} min={-0.05} max={0.12} step={0.0025} percent />
+    <NumberInput label="Taxable" bind:value={$scenarioStore.returnTaxable} min={-0.05} max={0.12} step={0.0025} percent />
+    <p class="ref">US long-run nominal avg: stocks ≈ 10.4% · bonds ≈ 4.8%.</p>
   </section>
 
   <section>
     <h3>IRMAA & taxes</h3>
     <div class="checkbox-row">
       <input id="include-irmaa" type="checkbox" bind:checked={$scenarioStore.includeIRMAA} />
-      <label for="include-irmaa">Model IRMAA (Medicare surcharge, 2-yr MAGI lookback)</label>
+      <label for="include-irmaa">Model IRMAA (Medicare surcharge)</label>
     </div>
     <SelectInput label="Tax law projection" bind:value={$scenarioStore.taxLawMode} options={lawModeOptions} />
   </section>
@@ -228,12 +230,12 @@
       {showAdvanced ? '▼' : '▶'} Advanced
     </button>
     {#if showAdvanced}
-      <NumberInput label="Current wages (pre-retire)" prefix="$" bind:value={$scenarioStore.currentWages} min={0} max={500000} step={2500} withSlider
+      <NumberInput label="Current wages (pre-retire)" prefix="$" bind:value={$scenarioStore.currentWages} min={0} max={500000} step={2500}
         help="Only used if currentAge < retireAge." />
       <SelectInput label="Current state (pre-retire)" bind:value={$scenarioStore.currentState} options={stateOptions} />
-      <NumberInput label="SS COLA" bind:value={$scenarioStore.ssCOLA} min={0} max={0.08} step={0.0025} withSlider />
-      <NumberInput label="Plan until age" bind:value={$scenarioStore.planUntilAge} min={70} max={110} withSlider />
-      <NumberInput label="NPV discount rate" bind:value={$scenarioStore.discountRate} min={0} max={0.08} step={0.005} withSlider
+      <NumberInput label="SS COLA" bind:value={$scenarioStore.ssCOLA} min={0} max={0.08} step={0.0025} percent />
+      <NumberInput label="Plan until age" bind:value={$scenarioStore.planUntilAge} min={70} max={110} step={1} />
+      <NumberInput label="NPV discount rate" bind:value={$scenarioStore.discountRate} min={0} max={0.08} step={0.005} percent
         help="Real discount rate for lifetime-tax NPV. 3% is conventional." />
     {/if}
   </section>
@@ -242,74 +244,80 @@
 <style>
   .panel {
     background: white;
-    padding: 14px;
+    padding: 12px 14px;
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     /* Don't pin to 100% height — let the panel size to its content so that
        siblings in the left column (e.g. MCControls on Stress test) remain
        reachable via the outer column's scroll. */
   }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  h2 { font-size: 16px; font-weight: 700; }
-  h3 { font-size: 13px; font-weight: 700; color: #2a4d8f; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-  section { padding-bottom: 8px; border-bottom: 1px solid #eee; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  h2 { font-size: 15px; font-weight: 700; }
+  h3 { font-size: 11.5px; font-weight: 700; color: #2a4d8f; margin: 12px 0 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  section { padding-bottom: 6px; border-bottom: 1px solid #eee; }
   section:last-child { border-bottom: none; }
   section.advanced { border-bottom: none; }
   button {
-    padding: 4px 10px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
-    font-size: 12px; cursor: pointer;
+    padding: 3px 9px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
+    font-size: 11px; cursor: pointer;
   }
   button:hover { background: #e6e6e6; }
   button.disclosure {
-    background: none; border: none; padding: 8px 0; font-size: 13px; font-weight: 700;
+    background: none; border: none; padding: 6px 0; font-size: 11.5px; font-weight: 700;
     color: #2a4d8f; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;
     text-align: left; width: 100%;
   }
   button.disclosure:hover { background: none; color: #1e3a8a; }
-  .row { margin-bottom: 10px; }
-  .row label { display: block; font-size: 13px; color: #444; font-weight: 500; margin-bottom: 2px; }
-  .row select {
-    width: 100%; padding: 5px 6px; border: 1px solid #ccc; border-radius: 4px;
-    font-size: 13px; background: white;
-  }
-  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .checkbox-row label { font-size: 13px; color: #444; cursor: pointer; }
-  /* Visually emphasized lever — the "how much to convert" slider */
+  .checkbox-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .checkbox-row label { font-size: 12px; color: #444; cursor: pointer; }
+  .checkbox-row input { accent-color: #2a4d8f; }
+  /* Visually emphasized lever — the "how much to convert" */
   .headline-lever {
     background: #eff6ff;
     border-left: 3px solid #2a4d8f;
-    padding: 8px 10px 2px;
     border-radius: 3px;
-    margin: 4px 0 10px;
+    padding: 6px 8px 2px;
+    margin: 3px 0 6px;
   }
+  .headline-lever :global(.row:last-child) { margin-bottom: 4px; }
+  .inline-select {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-bottom: 5px;
+  }
+  .inline-select label { flex: 1; font-size: 12px; color: #444; font-weight: 500; }
+  .inline-select select {
+    max-width: 60%; padding: 3px 5px; border: 1px solid #ccc; border-radius: 4px;
+    font-size: 12px; background: white; color: #333;
+  }
+  .inline-select select:focus { outline: 1px solid #2a4d8f; border-color: #2a4d8f; }
   .blend {
     display: flex; align-items: baseline; gap: 8px;
     background: #eff6ff;
     border-left: 3px solid #2a4d8f;
     border-radius: 3px;
-    padding: 6px 10px;
-    margin: 4px 0 10px;
+    padding: 5px 9px;
+    margin: 3px 0 7px;
     cursor: help;
   }
-  .blend-value { font-size: 18px; font-weight: 700; color: #1e3a8a; font-variant-numeric: tabular-nums; }
-  .blend-label { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.4px; }
-  .infl-hint { font-size: 10.5px; color: #6b7280; line-height: 1.3; margin: 6px 0 0; }
+  .blend-value { font-size: 16px; font-weight: 700; color: #1e3a8a; font-variant-numeric: tabular-nums; }
+  .blend-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.4px; }
+  .ref { font-size: 10px; color: #94a3b8; margin: 4px 0 0; line-height: 1.3; }
   .infl-table {
-    width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 0;
+    width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0 0;
   }
   .infl-table th {
     font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase;
     letter-spacing: 0.4px; text-align: left; padding: 0 2px 3px;
   }
   .infl-table th.nat { text-align: right; }
-  .infl-table td { padding: 2px 2px; vertical-align: middle; }
+  .infl-table td { padding: 1px 2px; vertical-align: middle; }
   .infl-table .cat-name {
     font-size: 12px; font-weight: 600; color: #1e3a8a; white-space: nowrap;
     padding-right: 6px;
   }
   .infl-table .cat-name.other { color: #92400e; }
   .infl-table .nat {
-    font-size: 10.5px; color: #94a3b8; text-align: right; white-space: nowrap;
+    font-size: 10px; color: #94a3b8; text-align: right; white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
   .infl-table .auto-val {
@@ -317,7 +325,7 @@
     font-variant-numeric: tabular-nums; padding: 0 4px;
   }
   .infl-input {
-    width: 64px; padding: 2px 4px; border: 1px solid #ccc; border-radius: 3px;
+    width: 62px; padding: 2px 4px; border: 1px solid #ccc; border-radius: 3px;
     font-size: 12px; font-family: monospace; text-align: right;
   }
   .infl-input:focus { outline: 1px solid #2a4d8f; border-color: #2a4d8f; }

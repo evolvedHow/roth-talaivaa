@@ -6,14 +6,12 @@
   export let step = 1;
   export let prefix = '';
   export let suffix = '';
-  export let withSlider = false;
   export let help = '';
   // When true, the input shows value*100 (e.g. 30 for 0.30) and writes back /100.
   // min/max/step are then interpreted in the *displayed* percent domain.
   export let percent = false;
   // Free mode: plain text input with inputmode="decimal". No spin buttons, no
-  // step rounding. Accepts any decimal precision. Useful for inflation rates
-  // where users may want e.g. 3.174%.
+  // step rounding. Accepts any decimal precision.
   export let free = false;
 
   // Unique id per instance for label `for` association.
@@ -44,24 +42,12 @@
 </script>
 
 <div class="row">
-  <div class="row-head">
-    <label for={id}>{label}</label>
-    {#if help}<span class="help" title={help}>?</span>{/if}
-  </div>
-  <div class="row-controls">
-    {#if withSlider}
-      <input
-        type="range"
-        {min}
-        {max}
-        {step}
-        value={display}
-        on:input={onInput}
-        class="slider"
-        aria-label="{label} slider"
-      />
-    {/if}
-    <span class="prefix">{prefix}</span>
+  <label for={id} title={help || undefined}>
+    <span class="label-text">{label}</span>
+    {#if help}<span class="help">?</span>{/if}
+  </label>
+  <div class="controls">
+    {#if prefix}<span class="prefix">{prefix}</span>{/if}
     {#if free}
       <input
         {id}
@@ -69,7 +55,7 @@
         inputmode="decimal"
         value={display}
         on:input={onInput}
-        class="num free"
+        class="free"
       />
     {:else}
       <input
@@ -88,29 +74,32 @@
 </div>
 
 <style>
-  .row { margin-bottom: 10px; }
-  .row-head { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
-  label { font-size: 13px; color: #444; font-weight: 500; }
+  .row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-bottom: 5px;
+  }
+  label {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px;
+    font-size: 12px; color: #444; font-weight: 500;
+  }
+  .label-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .help {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 14px; height: 14px; border-radius: 50%;
-    background: #ddd; color: #555; font-size: 10px; cursor: help;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #ddd; color: #555; font-size: 9px; cursor: help; flex-shrink: 0;
   }
-  .row-controls { display: flex; align-items: center; gap: 6px; }
-  .slider { flex: 1; min-width: 80px; }
-  .num {
-    width: 90px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px;
-    font-size: 13px; font-family: monospace; text-align: right;
+  .controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .num, .free {
+    width: 74px; padding: 3px 6px; border: 1px solid #ccc; border-radius: 4px;
+    font-size: 12px; font-family: monospace; text-align: right;
+    -moz-appearance: textfield; appearance: textfield;
   }
-  .num.free {
-    appearance: textfield;
-    -moz-appearance: textfield;
-    width: 80px;
+  .num:focus, .free:focus { outline: 1px solid #2a4d8f; border-color: #2a4d8f; }
+  .num::-webkit-outer-spin-button,
+  .num::-webkit-inner-spin-button,
+  .free::-webkit-outer-spin-button,
+  .free::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
   }
-  .num.free::-webkit-outer-spin-button,
-  .num.free::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  .prefix, .suffix { font-size: 12px; color: #777; }
+  .prefix, .suffix { font-size: 11px; color: #777; white-space: nowrap; }
 </style>
